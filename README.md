@@ -19,20 +19,30 @@ you're in, without going to the taskbar.
   (e.g. Ctrl+Alt+Q). Tick *Also hold the Windows key* for Win combos. The previous-window
   shortcut is always the same combo plus Shift. The choice is saved in
   `HKCU\Software\SameAppSwitcher`. *Reset* returns to Alt+`.
-- Single small exe, no installer. Uses only the Win32 API (`windows-sys`).
+- Single small portable exe, with an optional MSI installer. Uses only the Win32 API (`windows-sys`).
 
-## Building (WSL Ubuntu)
+## Building on Windows
 
-```bash
-cd /mnt/c/Users/JBMcMichael/Projects/same-app-switcher
-./setup-wsl.sh        # once (already done if you set up textexpander): rustup, Windows target, MinGW
-./build.sh            # builds dist/SameAppSwitcher.exe
-./build.sh run        # same, then restarts the app
+WSL and MinGW are not required. Install [Rust](https://rustup.rs/) and
+[Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/) with
+the **Desktop development with C++** workload and Windows SDK. Open PowerShell:
+
+```powershell
+./build.ps1          # build dist/SameAppSwitcher.exe
+./build.ps1 -Run     # build and start the portable app
+./build.ps1 -Package # also create versioned EXE, ZIP, MSI, and checksums
 ```
 
-The build runs in WSL but produces a native Windows exe. `build.rs` uses MinGW's `windres` to embed the icon, the shortcut dialog, the manifest
-(sharp on high-DPI screens, modern controls) and version info. Build files go to
-`~/.cache/same-app-switcher-target` because building on `/mnt/c` is slow.
+The script finds the Visual Studio tools automatically, builds the native x64
+MSVC Rust target, and uses the Windows SDK resource compiler to embed the icon,
+shortcut dialog, manifest, and version information. The C runtime is linked
+statically, so portable users do not need a Visual C++ redistributable.
+
+Packaging additionally requires the [.NET SDK](https://dotnet.microsoft.com/download)
+and WiX CLI: `dotnet tool install --global wix --version 4.0.6`.
+For newer .NET runtimes, set `$env:DOTNET_ROLL_FORWARD = 'Major'` before packaging.
+The existing `setup-wsl.sh` and `build.sh` remain optional WSL cross-build helpers
+for the portable executable.
 
 ## Downloads and installation
 
@@ -49,8 +59,9 @@ files attached to a tagged GitHub Release:
 
 Exit any running copy before installing or upgrading. Launch from the Start menu
 after installation; **Start with Windows** remains an opt-in tray setting.
-Before uninstalling, turn off **Start with Windows** in the tray menu if enabled.
-Uninstall preserves the saved shortcut preference.
+Uninstall removes startup only when the entry points at this installation.
+Upgrades preserve the startup setting, and a portable copy's startup entry is
+left alone. Uninstall preserves the saved shortcut preference.
 These builds are unsigned; Windows may display a SmartScreen warning.
 
 ## GitHub releases
@@ -63,21 +74,12 @@ These builds are unsigned; Windows may display a SmartScreen warning.
    MSI installation and removal, and publishes a GitHub Release with all downloads.
 
 The tag must exactly match the Cargo version. Manual workflow runs create artifacts
-without publishing a release. The build uses the Windows GNU Rust target and
-MinGW (including `windres` for embedded resources), plus WiX 4.0.6 for the MSI.
+without publishing a release. The build uses the native Windows MSVC Rust target,
+Visual Studio Build Tools, the Windows SDK, and WiX 4.0.6 for the MSI. CI verifies
+installation, upgrade, startup preservation and cleanup, and uninstallation
+on a disposable Windows runner.
 The WiX `UpgradeCode` and component GUIDs in `installer/Package.wxs` must remain
 stable across releases so upgrades recognize existing installations.
-
-For local Windows packaging, install Rust, the `x86_64-pc-windows-gnu` target,
-MinGW-w64 (with `gcc` and `windres` on PATH), and the WiX CLI with
-`dotnet tool install --global wix --version 4.0.6`. In PowerShell:
-
-```powershell
-$env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = 'gcc'
-$env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = '-C target-feature=+crt-static'
-cargo build --locked --release --target x86_64-pc-windows-gnu
-./scripts/package.ps1
-```
 
 ## Known limits
 

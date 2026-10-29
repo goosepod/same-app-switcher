@@ -1,5 +1,5 @@
 //! Compiles assets/app.rc (icon, shortcut dialog, manifest, version info) into the Windows exe
-//! using MinGW's windres.
+//! using the Windows SDK resource compiler or MinGW's windres.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -9,11 +9,24 @@ fn main() {
         println!("cargo:rerun-if-changed=assets/{f}");
     }
     let target = std::env::var("TARGET").unwrap_or_default();
-    if !target.ends_with("windows-gnu") {
+    if !target.contains("windows") {
         return; // non-Windows checks don't need resources
     }
 
     let assets = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("assets");
+    if target.ends_with("windows-msvc") {
+        let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("app.res");
+        let status = Command::new("rc.exe")
+            .current_dir(&assets)
+            .args(["/nologo", "/fo"])
+            .arg(&out)
+            .arg("app.rc")
+            .status()
+            .expect("Windows SDK resource compiler not found; run ./build.ps1 or use an x64 Visual Studio developer shell");
+        assert!(status.success(), "Windows resource compilation failed");
+        println!("cargo:rustc-link-arg-bins={}", out.display());
+        return;
+    }
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("app-res.o");
     let windres = std::env::var("WINDRES").unwrap_or_else(|_| {
         if cfg!(windows) { "windres".into() } else { "x86_64-w64-mingw32-windres".into() }

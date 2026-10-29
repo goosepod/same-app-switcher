@@ -4,3 +4,4 @@
 *.ps1 text eol=lf
 *.yml text eol=lf
 *.wxs text eol=lf
+*.c text eol=lf

@@ -5,6 +5,12 @@
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="AppIcon" SourceFile="assets/app.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Binary Id="StartupActions" SourceFile="$(var.StartupDll)" />
+    <CustomAction Id="RemoveStartupEntry" BinaryRef="StartupActions" DllEntry="RemoveStartupEntry" Execute="immediate" Return="ignore" />
+    <InstallExecuteSequence>
+      <!-- Run only after a successful uninstall. Upgrades preserve autostart. -->
+      <Custom Action="RemoveStartupEntry" After="InstallFinalize" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="INSTALLFOLDER" Name="SameAppSwitcher">
         <Component Id="Application" Guid="81451245-817B-4B6B-9C35-A0E3A2F4240B">

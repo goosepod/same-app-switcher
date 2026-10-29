@@ -1,4 +1,4 @@
-# Run from the repository root after building the Windows GNU release target.
+# Run via ./build.ps1 -Package so the native compiler is initialized.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -15,7 +15,7 @@ if ([int]$parts[0] -gt 255 -or [int]$parts[1] -gt 255 -or [int]$parts[2] -gt 655
 }
 
 $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'target' }
-$exe = Join-Path $targetDir 'x86_64-pc-windows-gnu/release/SameAppSwitcher.exe'
+$exe = Join-Path $targetDir 'x86_64-pc-windows-msvc/release/SameAppSwitcher.exe'
 $stem = "SameAppSwitcher-$version-windows-x64"
 New-Item -ItemType Directory -Force dist | Out-Null
 Copy-Item $exe "dist/$stem.exe"
@@ -29,7 +29,12 @@ try {
 } finally {
     Remove-Item $stage -Recurse -Force
 }
-wix build installer/Package.wxs -arch x64 -d "Version=$version" -d "ExePath=$((Resolve-Path $exe).Path)" -o "dist/$stem.msi"
+$installerDir = Join-Path $targetDir 'installer'
+New-Item -ItemType Directory -Force $installerDir | Out-Null
+$startupDll = Join-Path $installerDir 'startup.dll'
+cl.exe /nologo /LD /MT /W4 /WX /DUNICODE /D_UNICODE installer/startup.c "/Fo$installerDir/startup.obj" /link "/OUT:$startupDll" msi.lib advapi32.lib
+if ($LASTEXITCODE) { throw 'Could not build the native installer startup action.' }
+wix build installer/Package.wxs -arch x64 -d "Version=$version" -d "ExePath=$((Resolve-Path $exe).Path)" -d "StartupDll=$((Resolve-Path $startupDll).Path)" -o "dist/$stem.msi"
 if ($LASTEXITCODE) { throw 'WiX installer build failed.' }
 $files = @("dist/$stem.exe", "dist/$stem.zip", "dist/$stem.msi")
 $files | ForEach-Object {

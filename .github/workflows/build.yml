@@ -19,36 +19,22 @@ jobs:
         shell: pwsh
     env:
       DOTNET_ROLL_FORWARD: Major
-      CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: gcc
-      CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS: -C target-feature=+crt-static
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: msys2/setup-msys2@v2.33.0
-        with:
-          install: mingw-w64-x86_64-gcc
       - name: Set up Windows tools
         run: |
-          'C:\msys64\mingw64\bin' >> $env:GITHUB_PATH
-          rustup target add x86_64-pc-windows-gnu
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           dotnet tool install --global wix --version 4.0.6
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Check and build
-        run: |
-          cargo check --locked --target x86_64-pc-windows-gnu
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          cargo build --locked --release --target x86_64-pc-windows-gnu
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Package EXE, ZIP, and MSI
+      - name: Check, build, and package EXE, ZIP, and MSI
         id: package
-        run: ./scripts/package.ps1
-      - name: Verify MSI install and uninstall
+        run: ./build.ps1 -Package
+      - name: Verify MSI upgrade and startup cleanup
         run: ./scripts/test-installer.ps1
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: SameAppSwitcher-${{ steps.package.outputs.version }}-windows-x64
           path: |
-            dist/*.exe
+            dist/SameAppSwitcher-*.exe
             dist/*.zip
             dist/*.msi
             dist/SHA256SUMS.txt
