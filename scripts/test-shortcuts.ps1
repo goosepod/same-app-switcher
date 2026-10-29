@@ -9,6 +9,7 @@ public static class ShortcutUi {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
     [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr window, int id);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, UIntPtr wparam, IntPtr lparam);
     [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wparam, IntPtr lparam, uint flags, uint timeout, out UIntPtr result);
@@ -37,7 +38,7 @@ function Wait-For([scriptblock]$Condition, [string]$Description) {
     $timer = [Diagnostics.Stopwatch]::StartNew()
     while ($timer.Elapsed.TotalSeconds -lt 10) {
         $value = & $Condition
-        if ($null -ne $value -and $value -ne [IntPtr]::Zero) { return $value }
+        if ($value -and !($value -is [IntPtr] -and $value -eq [IntPtr]::Zero)) { return $value }
         Start-Sleep -Milliseconds 100
     }
     throw "Timed out: $Description"
@@ -45,14 +46,21 @@ function Wait-For([scriptblock]$Condition, [string]$Description) {
 function Send-Ui([IntPtr]$Window, [uint32]$Message, [uint64]$Wparam = 0, [int64]$Lparam = 0) {
     $result = [UIntPtr]::Zero
     if ([ShortcutUi]::SendMessageTimeout($Window, $Message, [UIntPtr]$Wparam, [IntPtr]$Lparam, 2, 2000, [ref]$result) -eq [IntPtr]::Zero) {
-        throw 'The app did not respond to a UI test message.'
+        throw ('The app did not respond to UI message 0x{0:X} on window {1}.' -f $Message, $Window)
     }
     return $result.ToUInt64()
 }
 function Open-Dialog {
     $main = [ShortcutUi]::FindWindow('SameAppSwitcherWnd', 'SameAppSwitcher')
     [void][ShortcutUi]::PostMessage($main, 0x111, [UIntPtr]100, [IntPtr]::Zero)
-    Wait-For { [ShortcutUi]::FindWindow('#32770', 'SameAppSwitcher - Shortcuts') } 'shortcut dialog'
+    Wait-For {
+        $dialog = [ShortcutUi]::FindWindow('#32770', 'SameAppSwitcher - Shortcuts')
+        if ([ShortcutUi]::IsWindowVisible($dialog) -and [ShortcutUi]::GetDlgItem($dialog, 1005) -ne [IntPtr]::Zero) { $dialog }
+    } 'initialized shortcut dialog'
+}
+function Dismiss-Dialog([IntPtr]$Dialog, [uint32]$Message, [uint64]$Wparam = 0) {
+    [void][ShortcutUi]::PostMessage($Dialog, $Message, [UIntPtr]$Wparam, [IntPtr]::Zero)
+    [void](Wait-For { ![ShortcutUi]::IsWindow($Dialog) } 'dialog close')
 }
 function Read-Hotkey([IntPtr]$Dialog, [int]$Id) {
     Send-Ui ([ShortcutUi]::GetDlgItem($Dialog, $Id)) 0x402
@@ -91,7 +99,7 @@ try {
     if ([ShortcutUi]::IsWindowEnabled([ShortcutUi]::GetDlgItem($dialog, 1))) { throw 'Duplicate shortcuts were accepted.' }
     Set-Hotkey $dialog 1005 0x657
     Write-Host 'Saving independent shortcuts.'
-    [void](Send-Ui $dialog 0x111 1)
+    Dismiss-Dialog $dialog 0x111 1
     if ([ShortcutUi]::IsWindow($dialog)) { throw 'Independent shortcut pair was not saved.' }
     $saved = [byte[]](Get-ItemPropertyValue $settings -Name Shortcuts)
     $expected = [BitConverter]::GetBytes([uint32]0x30051) + [BitConverter]::GetBytes([uint32]0x30057)
@@ -107,7 +115,7 @@ try {
     [void](Send-Ui $dialog 0x111 1006)
     if (![ShortcutUi]::RegisterHotKey([IntPtr]::Zero, 999, 3, 0x57)) { throw 'Editing did not release the previous shortcut.' }
     [void][ShortcutUi]::UnregisterHotKey([IntPtr]::Zero, 999)
-    [void](Send-Ui $dialog 0x10)
+    Dismiss-Dialog $dialog 0x10
     if ([ShortcutUi]::IsWindow($dialog)) { throw 'Closing the dialog did not destroy it.' }
     if ([ShortcutUi]::RegisterHotKey([IntPtr]::Zero, 999, 3, 0x57)) {
         [void][ShortcutUi]::UnregisterHotKey([IntPtr]::Zero, 999)
@@ -119,7 +127,7 @@ try {
     $dialog = Open-Dialog
     [void](Send-Ui $dialog 0x111 1004)
     if ((Read-Hotkey $dialog 1005) -ne ((Read-Hotkey $dialog 1001) -bor 0x100)) { throw 'Reset did not restore the default reverse shortcut.' }
-    [void](Send-Ui $dialog 0x111 2)
+    Dismiss-Dialog $dialog 0x111 2
 } catch {
     Write-Host ($_ | Out-String)
     if ($app) { Write-Host ([ShortcutUi]::DescribeWindows([uint32]$app.Id)) }
