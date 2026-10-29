@@ -50,7 +50,7 @@ function Send-Ui([IntPtr]$Window, [uint32]$Message, [uint64]$Wparam = 0, [int64]
     return $result.ToUInt64()
 }
 function Open-Dialog {
-    $main = [ShortcutUi]::FindWindow('SameAppSwitcherWnd', $null)
+    $main = [ShortcutUi]::FindWindow('SameAppSwitcherWnd', 'SameAppSwitcher')
     [void][ShortcutUi]::PostMessage($main, 0x111, [UIntPtr]100, [IntPtr]::Zero)
     Wait-For { [ShortcutUi]::FindWindow('#32770', 'SameAppSwitcher - Shortcuts') } 'shortcut dialog'
 }
@@ -62,7 +62,7 @@ function Set-Hotkey([IntPtr]$Dialog, [int]$Id, [uint64]$Value) {
     [void](Send-Ui $Dialog 0x111 ($Id -bor (0x300 -shl 16)))
 }
 function Close-App {
-    $main = [ShortcutUi]::FindWindow('SameAppSwitcherWnd', $null)
+    $main = [ShortcutUi]::FindWindow('SameAppSwitcherWnd', 'SameAppSwitcher')
     if ($main -ne [IntPtr]::Zero) {
         [void][ShortcutUi]::PostMessage($main, 0x111, [UIntPtr]102, [IntPtr]::Zero)
     }
@@ -72,7 +72,7 @@ function Close-App {
 
 $settings = 'HKCU:\Software\SameAppSwitcher'
 $app = $null
-if ([ShortcutUi]::FindWindow('SameAppSwitcherWnd', $null) -ne [IntPtr]::Zero) { throw 'An app instance is already running.' }
+if ([ShortcutUi]::FindWindow('SameAppSwitcherWnd', 'SameAppSwitcher') -ne [IntPtr]::Zero) { throw 'An app instance is already running.' }
 $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\SameAppSwitcher')
 if ($key) {
     try {
@@ -83,7 +83,7 @@ try {
     if (!(Test-Path $settings)) { New-Item $settings -Force | Out-Null }
     New-ItemProperty $settings -Name Shortcut -Value ((3 -shl 16) -bor 0x51) -PropertyType DWord -Force | Out-Null
     $app = Start-Process (Resolve-Path dist/SameAppSwitcher.exe).Path -PassThru
-    [void](Wait-For { [ShortcutUi]::FindWindow('SameAppSwitcherWnd', $null) } 'app startup')
+    [void](Wait-For { [ShortcutUi]::FindWindow('SameAppSwitcherWnd', 'SameAppSwitcher') } 'app startup')
     Write-Host 'App started; checking legacy migration.'
     $dialog = Open-Dialog
     if ((Read-Hotkey $dialog 1001) -ne 0x651 -or (Read-Hotkey $dialog 1005) -ne 0x751) { throw 'Legacy shortcut migration failed.' }
@@ -100,7 +100,7 @@ try {
     Close-App
     Write-Host 'Restarting to check persistence.'
     $app = Start-Process (Resolve-Path dist/SameAppSwitcher.exe).Path -PassThru
-    [void](Wait-For { [ShortcutUi]::FindWindow('SameAppSwitcherWnd', $null) } 'app restart')
+    [void](Wait-For { [ShortcutUi]::FindWindow('SameAppSwitcherWnd', 'SameAppSwitcher') } 'app restart')
     $dialog = Open-Dialog
     if ((Read-Hotkey $dialog 1001) -ne 0x651 -or (Read-Hotkey $dialog 1005) -ne 0x657) { throw 'Independent shortcuts did not survive restart.' }
     [void](Send-Ui ([ShortcutUi]::GetDlgItem($dialog, 1006)) 0xF1 1)
