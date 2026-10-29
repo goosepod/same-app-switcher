@@ -12,7 +12,6 @@
           <File Source="LICENSE" />
           <File Source="README.md" />
           <RegistryValue Root="HKCU" Key="Software\SameAppSwitcher\Installer" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
-          <RemoveRegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="SameAppSwitcher" Action="removeOnUninstall" />
           <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
         </Component>
       </Directory>

@@ -49,7 +49,8 @@ files attached to a tagged GitHub Release:
 
 Exit any running copy before installing or upgrading. Launch from the Start menu
 after installation; **Start with Windows** remains an opt-in tray setting.
-Uninstall removes the startup entry but preserves the saved shortcut preference.
+Before uninstalling, turn off **Start with Windows** in the tray menu if enabled.
+Uninstall preserves the saved shortcut preference.
 These builds are unsigned; Windows may display a SmartScreen warning.
 
 ## GitHub releases
