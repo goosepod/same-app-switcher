@@ -32,6 +32,8 @@ jobs:
         run: ./scripts/test-installer.ps1
       - name: Verify shortcut dialog and saved settings
         run: ./scripts/test-shortcuts.ps1
+      - name: Verify packages and signature requirement
+        run: ./scripts/test-package.ps1
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: SameAppSwitcher-${{ steps.package.outputs.version }}-windows-x64

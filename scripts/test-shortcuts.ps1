@@ -105,6 +105,8 @@ try {
     if ((Read-Hotkey $dialog 1001) -ne 0x651 -or (Read-Hotkey $dialog 1005) -ne 0x657) { throw 'Independent shortcuts did not survive restart.' }
     [void](Send-Ui ([ShortcutUi]::GetDlgItem($dialog, 1006)) 0xF1 1)
     [void](Send-Ui $dialog 0x111 1006)
+    if (![ShortcutUi]::RegisterHotKey([IntPtr]::Zero, 999, 3, 0x57)) { throw 'Editing did not release the previous shortcut.' }
+    [void][ShortcutUi]::UnregisterHotKey([IntPtr]::Zero, 999)
     [void](Send-Ui $dialog 0x10)
     if ([ShortcutUi]::IsWindow($dialog)) { throw 'Closing the dialog did not destroy it.' }
     if ([ShortcutUi]::RegisterHotKey([IntPtr]::Zero, 999, 3, 0x57)) {
