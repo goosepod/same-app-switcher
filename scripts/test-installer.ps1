@@ -14,7 +14,9 @@ $sentinel = 'SameAppSwitcher.InstallerTest.' + [guid]::NewGuid().ToString()
 $activeMsi = $null
 
 function Get-Startup {
-    Get-ItemPropertyValue $runKey -Name SameAppSwitcher -ErrorAction SilentlyContinue
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Run')
+    if ($null -eq $key) { return $null }
+    try { $key.GetValue('SameAppSwitcher', $null) } finally { $key.Dispose() }
 }
 function Invoke-Msi([string]$Action, [string]$Path) {
     $log = Join-Path $env:TEMP ('SameAppSwitcher-' + [guid]::NewGuid().ToString() + '.log')
@@ -37,7 +39,7 @@ try {
     if (Get-Startup) { throw 'Install enabled startup without opting in.' }
 
     # Simulate enabling startup from the tray. Preserve it through a major upgrade.
-    New-Item $runKey -Force | Out-Null
+    if (!(Test-Path $runKey)) { New-Item $runKey -Force | Out-Null }
     $command = '"' + $installedExe + '"'
     Set-ItemProperty $runKey -Name SameAppSwitcher -Value $command
     Set-ItemProperty $runKey -Name $sentinel -Value 'unrelated-value'
