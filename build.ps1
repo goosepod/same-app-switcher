@@ -1,10 +1,12 @@
 param(
     [switch]$Package,
+    [switch]$PreparePackage,
     [switch]$Run
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ($Package -and $PreparePackage) { throw 'Choose Package or PreparePackage, not both.' }
 Push-Location $PSScriptRoot
 try {
     # Initialize the x64 compiler and Windows SDK even in a normal PowerShell.
@@ -41,6 +43,7 @@ try {
     Get-Process SameAppSwitcher -ErrorAction SilentlyContinue | Where-Object Path -eq $destination | Stop-Process
     Copy-Item $exe $destination -Force
     if ($Package) { & ./scripts/package.ps1 }
+    if ($PreparePackage) { & ./scripts/package.ps1 -Phase Prepare }
     if ($Run) { Start-Process $destination }
     Write-Host 'Built dist/SameAppSwitcher.exe'
 } finally {

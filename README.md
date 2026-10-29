@@ -11,14 +11,20 @@ you're in, without going to the taskbar.
 - Works for **any** app. Windows count as "the same app" when they come from the same executable
   (all `Code.exe` windows, all `firefox.exe` windows, all Explorer windows, ...).
 - Hold Alt and tap ` repeatedly to walk through every window. Shift reverses direction.
+- Cycling keeps a stable window order while the app changes focus. Reversing
+  retraces that order; clicking a different window or using Alt+Tab starts a new
+  order based on the app's most recently used windows. Closed windows drop out,
+  and newly opened windows join the end of the current order.
 - Minimized windows are restored. Windows on other virtual desktops are skipped.
 - The ` key is the one above Tab, found by its physical position, so it works on non-US layouts.
-- **Right-click or double-click** the tray icon for the menu: **Change shortcut...**,
+- **Right-click or double-click** the tray icon for the menu: **Change shortcuts...**,
   **Start with Windows**, and **Exit**.
-- **Change shortcut...** opens a small dialog: click the box and press any combination
-  (e.g. Ctrl+Alt+Q). Tick *Also hold the Windows key* for Win combos. The previous-window
-  shortcut is always the same combo plus Shift. The choice is saved in
-  `HKCU\Software\SameAppSwitcher`. *Reset* returns to Alt+`.
+- **Change shortcuts...** opens separate **Next window** and **Previous window**
+  fields. Choose independent combinations (e.g. Ctrl+Alt+Q and Ctrl+Alt+W), with
+  a Windows-key option for each. Combinations must be different and include Alt,
+  Ctrl, or Win. A conflict leaves both shortcuts unapplied so you can correct it.
+  Choices are saved together in `HKCU\Software\SameAppSwitcher`. Existing shortcuts
+  migrate automatically; *Reset defaults* restores Alt+` and Alt+Shift+`.
 - Single small portable exe, with an optional MSI installer. Uses only the Win32 API (`windows-sys`).
 
 ## Building on Windows
@@ -62,14 +68,16 @@ after installation; **Start with Windows** remains an opt-in tray setting.
 Uninstall removes startup only when the entry points at this installation.
 Upgrades preserve the startup setting, and a portable copy's startup entry is
 left alone. Uninstall preserves the saved shortcut preference.
-These builds are unsigned; Windows may display a SmartScreen warning.
+Builds are unsigned until a signing account is configured; Windows may display a
+SmartScreen warning. The optional signed-release job and [signing setup guide](docs/signing.md)
+are ready for Azure Artifact Signing.
 
 ## GitHub releases
 
 1. Update the version in `Cargo.toml`, `Cargo.lock`, `assets/app.rc`, and
    `assets/app.manifest` together, then push the changes to `main`.
-2. Create and push the matching tag, for example `git tag v0.2.0` followed by
-   `git push origin v0.2.0`.
+2. Create and push the matching tag, for example `git tag v0.3.0` followed by
+   `git push origin v0.3.0`.
 3. The **Windows build** workflow compiles the app, builds the packages, checks
    MSI installation and removal, and publishes a GitHub Release with all downloads.
 
@@ -77,7 +85,9 @@ The tag must exactly match the Cargo version. Manual workflow runs create artifa
 without publishing a release. The build uses the native Windows MSVC Rust target,
 Visual Studio Build Tools, the Windows SDK, and WiX 4.0.6 for the MSI. CI verifies
 installation, upgrade, startup preservation and cleanup, and uninstallation
-on a disposable Windows runner.
+on a disposable Windows runner. It also runs window-order and shortcut tests,
+then exercises the real shortcut dialog for migration, validation, persistence,
+reset, and Cancel/close recovery.
 The WiX `UpgradeCode` and component GUIDs in `installer/Package.wxs` must remain
 stable across releases so upgrades recognize existing installations.
 

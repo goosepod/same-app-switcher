@@ -766,20 +766,23 @@ unsafe fn activate(root: HWND) -> bool {
         root
     };
     if IsIconic(root) != 0 {
-        ShowWindow(root, SW_RESTORE);
+        ShowWindowAsync(root, SW_RESTORE);
     }
     if SetForegroundWindow(hwnd) == 0 {
-        let foreground_thread = GetWindowThreadProcessId(GetForegroundWindow(), null_mut());
-        let current_thread = GetCurrentThreadId();
-        let attached = foreground_thread != 0
-            && foreground_thread != current_thread
-            && AttachThreadInput(current_thread, foreground_thread, 1) != 0;
-        BringWindowToTop(hwnd);
-        SetForegroundWindow(hwnd);
-        if attached {
-            AttachThreadInput(current_thread, foreground_thread, 0);
-        }
+        return false;
     }
+    // Foreground changes across input queues are asynchronous. Wait briefly for
+    // the activation nudge, without attaching our queue to an unresponsive app.
+    let mut result = 0;
+    SendMessageTimeoutW(
+        hwnd,
+        WM_NULL,
+        0,
+        0,
+        SMTO_ABORTIFHUNG | SMTO_BLOCK,
+        200,
+        &mut result,
+    );
     root_owner(GetForegroundWindow()) == root
 }
 

@@ -4,6 +4,7 @@ Set-StrictMode -Version Latest
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class ShortcutUi {
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
     [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr window, int id);
@@ -13,6 +14,22 @@ public static class ShortcutUi {
     [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wparam, IntPtr lparam, uint flags, uint timeout, out UIntPtr result);
     [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr window, int id, uint modifiers, uint key);
     [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr window, int id);
+    private delegate bool EnumCallback(IntPtr window, IntPtr data);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumCallback callback, IntPtr data);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int count);
+    public static string DescribeWindows(uint processId) {
+        var text = new StringBuilder();
+        EnumWindows((window, data) => {
+            uint pid; GetWindowThreadProcessId(window, out pid);
+            if (pid == processId) {
+                var title = new StringBuilder(512); GetWindowText(window, title, title.Capacity);
+                text.AppendLine(window + " enabled=" + IsWindowEnabled(window) + " title=" + title);
+            }
+            return true;
+        }, IntPtr.Zero);
+        return text.ToString();
+    }
 }
 '@
 
@@ -67,11 +84,13 @@ try {
     New-ItemProperty $settings -Name Shortcut -Value ((3 -shl 16) -bor 0x51) -PropertyType DWord -Force | Out-Null
     $app = Start-Process (Resolve-Path dist/SameAppSwitcher.exe).Path -PassThru
     [void](Wait-For { [ShortcutUi]::FindWindow('SameAppSwitcherWnd', $null) } 'app startup')
+    Write-Host 'App started; checking legacy migration.'
     $dialog = Open-Dialog
     if ((Read-Hotkey $dialog 1001) -ne 0x651 -or (Read-Hotkey $dialog 1005) -ne 0x751) { throw 'Legacy shortcut migration failed.' }
     Set-Hotkey $dialog 1005 0x651
     if ([ShortcutUi]::IsWindowEnabled([ShortcutUi]::GetDlgItem($dialog, 1))) { throw 'Duplicate shortcuts were accepted.' }
     Set-Hotkey $dialog 1005 0x657
+    Write-Host 'Saving independent shortcuts.'
     [void](Send-Ui $dialog 0x111 1)
     if ([ShortcutUi]::IsWindow($dialog)) { throw 'Independent shortcut pair was not saved.' }
     $saved = [byte[]](Get-ItemPropertyValue $settings -Name Shortcuts)
@@ -79,6 +98,7 @@ try {
     if ([Convert]::ToBase64String($saved) -cne [Convert]::ToBase64String($expected)) { throw 'Saved shortcut pair was incorrect.' }
 
     Close-App
+    Write-Host 'Restarting to check persistence.'
     $app = Start-Process (Resolve-Path dist/SameAppSwitcher.exe).Path -PassThru
     [void](Wait-For { [ShortcutUi]::FindWindow('SameAppSwitcherWnd', $null) } 'app restart')
     $dialog = Open-Dialog
@@ -98,8 +118,15 @@ try {
     [void](Send-Ui $dialog 0x111 1004)
     if ((Read-Hotkey $dialog 1005) -ne ((Read-Hotkey $dialog 1001) -bor 0x100)) { throw 'Reset did not restore the default reverse shortcut.' }
     [void](Send-Ui $dialog 0x111 2)
+} catch {
+    Write-Host ($_ | Out-String)
+    if ($app) { Write-Host ([ShortcutUi]::DescribeWindows([uint32]$app.Id)) }
+    throw
 } finally {
-    Close-App
+    try { Close-App } catch {
+        Write-Warning $_
+        if ($app -and !$app.HasExited) { Stop-Process -Id $app.Id -Force }
+    }
     Remove-ItemProperty $settings -Name Shortcut -ErrorAction SilentlyContinue
     Remove-ItemProperty $settings -Name Shortcuts -ErrorAction SilentlyContinue
 }

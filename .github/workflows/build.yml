@@ -44,7 +44,7 @@ jobs:
           retention-days: 14
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && vars.SIGN_RELEASES != 'true'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -60,3 +60,88 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: gh release create "$RELEASE_TAG" dist/* --verify-tag --generate-notes --title "SameAppSwitcher $RELEASE_TAG"
+
+  signed-release:
+    if: startsWith(github.ref, 'refs/tags/v') && vars.SIGN_RELEASES == 'true'
+    needs: build
+    runs-on: windows-2025
+    timeout-minutes: 30
+    environment: release-signing
+    permissions:
+      contents: write
+      id-token: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_ROLL_FORWARD: Major
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check signing configuration
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          SIGNING_ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
+          SIGNING_ACCOUNT_NAME: ${{ vars.SIGNING_ACCOUNT_NAME }}
+          SIGNING_CERTIFICATE_PROFILE: ${{ vars.SIGNING_CERTIFICATE_PROFILE }}
+        run: |
+          foreach ($name in @('AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID', 'SIGNING_ENDPOINT', 'SIGNING_ACCOUNT_NAME', 'SIGNING_CERTIFICATE_PROFILE')) {
+            if (![Environment]::GetEnvironmentVariable($name)) { throw "Missing signing variable: $name. See docs/signing.md." }
+          }
+      - name: Set up WiX and prepare native payloads
+        run: |
+          dotnet tool install --global wix --version 4.0.6
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./build.ps1 -PreparePackage
+      - uses: azure/login@v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign the app and installer DLL
+        uses: Azure/artifact-signing-action@v2.0.0
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.SIGNING_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\target\package
+          files-folder-filter: exe,dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Embed signed payloads in the MSI
+        run: ./scripts/package.ps1 -Phase Package
+      - name: Sign the MSI
+        uses: Azure/artifact-signing-action@v2.0.0
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.SIGNING_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist
+          files-folder-filter: msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify signatures and create final ZIP and checksums
+        run: ./scripts/package.ps1 -Phase Finalize -RequireSigned
+      - name: Verify the signed installer lifecycle
+        run: ./scripts/test-installer.ps1
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: SameAppSwitcher-${{ github.ref_name }}-windows-x64-signed
+          path: |
+            dist/SameAppSwitcher-*.exe
+            dist/*.zip
+            dist/*.msi
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Publish signed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $assets = @(Get-ChildItem dist/SameAppSwitcher-*.exe, dist/*.zip, dist/*.msi, dist/SHA256SUMS.txt | ForEach-Object FullName)
+          gh release create $env:RELEASE_TAG @assets --verify-tag --generate-notes --title "SameAppSwitcher $env:RELEASE_TAG"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

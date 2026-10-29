@@ -5,8 +5,8 @@ $installers = @(Get-ChildItem dist/*.msi)
 if ($installers.Count -ne 1) { throw 'Expected exactly one MSI in dist.' }
 $msi = $installers[0].FullName
 $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'target' }
-$builtExe = (Resolve-Path (Join-Path $targetDir 'x86_64-pc-windows-msvc/release/SameAppSwitcher.exe')).Path
-$startupDll = (Resolve-Path (Join-Path $targetDir 'installer/startup.dll')).Path
+$builtExe = (Resolve-Path (Join-Path $targetDir 'package/SameAppSwitcher.exe')).Path
+$startupDll = (Resolve-Path (Join-Path $targetDir 'package/startup.dll')).Path
 $installedExe = [System.IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'SameAppSwitcher/SameAppSwitcher.exe'))
 $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'SameAppSwitcher/SameAppSwitcher.lnk'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
