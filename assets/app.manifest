@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="SameAppSwitcher" version="0.2.0.0" processorArchitecture="amd64"/>
+  <assemblyIdentity type="win32" name="SameAppSwitcher" version="0.3.0.0" processorArchitecture="amd64"/>
   <description>SameAppSwitcher</description>
   <!-- Modern-looking controls (and the hotkey box in the shortcut dialog) -->
   <dependency>

@@ -28,6 +28,8 @@ try {
     if ($LASTEXITCODE) { throw 'Could not install the Windows MSVC Rust target.' }
     cargo check --locked --target x86_64-pc-windows-msvc
     if ($LASTEXITCODE) { throw 'Cargo check failed.' }
+    cargo test --locked --target x86_64-pc-windows-msvc
+    if ($LASTEXITCODE) { throw 'Rust regression tests failed.' }
     cargo build --locked --release --target x86_64-pc-windows-msvc
     if ($LASTEXITCODE) { throw 'Cargo build failed.' }
 

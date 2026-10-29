@@ -29,7 +29,11 @@ fn main() {
     }
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("app-res.o");
     let windres = std::env::var("WINDRES").unwrap_or_else(|_| {
-        if cfg!(windows) { "windres".into() } else { "x86_64-w64-mingw32-windres".into() }
+        if cfg!(windows) {
+            "windres".into()
+        } else {
+            "x86_64-w64-mingw32-windres".into()
+        }
     });
 
     let ok = Command::new(&windres)
